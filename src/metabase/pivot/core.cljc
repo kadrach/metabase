@@ -540,13 +540,13 @@
   [values-by-key index-values value-formatters val-indexes color-getter]
   (let [{:keys [values valueColNames data dimensions]} (get values-by-key index-values)]
     (if data
-      (map-indexed (fn [index value]
-                     {:value ((nth value-formatters index) value)
-                      :clicked {:data       data
-                                :dimensions dimensions
-                                :colIdx     (nth val-indexes index)
-                                :value      value}
-                      :backgroundColor (color-getter value index (nth valueColNames index))})
+      (perf/mapv-indexed (fn [index value]
+                           {:value ((nth value-formatters index) value)
+                            :clicked {:data       data
+                                      :dimensions dimensions
+                                      :colIdx     (nth val-indexes index)
+                                      :value      value}
+                            :backgroundColor (color-getter value index (nth valueColNames index))})
                    values)
       (format-values values value-formatters))))
 
