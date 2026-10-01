@@ -4,12 +4,7 @@ import {
   setupCardEndpoints,
   setupCardQueryMetadataEndpoint,
 } from "__support__/server-mocks";
-import {
-  fireEvent,
-  screen,
-  settlePendingUpdates,
-  waitFor,
-} from "__support__/ui";
+import { fireEvent, screen, waitFor } from "__support__/ui";
 import * as Analytics from "metabase/analytics";
 import { PLUGIN_EMBEDDING_IFRAME_SDK_SETUP } from "metabase/plugins";
 import {
@@ -25,18 +20,18 @@ import { setup } from "./test-setup";
 describe("Embed flow > initial setup", () => {
   it("shows the embed experience step as the first step", async () => {
     setup();
-    await settlePendingUpdates();
 
     expect(
-      screen.getByText("Select your embed experience"),
+      await screen.findByText("Select your embed experience"),
     ).toBeInTheDocument();
   });
 
   it("selects the dashboard experience by default", async () => {
     setup();
-    await settlePendingUpdates();
 
-    const dashboardRadio = screen.getByRole("radio", { name: /Dashboard/ });
+    const dashboardRadio = await screen.findByRole("radio", {
+      name: /Dashboard/,
+    });
     expect(dashboardRadio).toBeChecked();
   });
 });
@@ -346,9 +341,8 @@ describe("Embed flow > forward and backward navigation", () => {
 
   it("renders the SSO radio above the Guest radio in the authentication card", async () => {
     setup({ simpleEmbeddingEnabled: true });
-    await settlePendingUpdates();
 
-    const radios = screen.getAllByRole("radio");
+    const radios = await screen.findAllByRole("radio");
     const ssoIndex = radios.findIndex((r) => r.getAttribute("value") === "sso");
     const guestIndex = radios.findIndex(
       (r) => r.getAttribute("value") === "guest-embed",
@@ -365,9 +359,8 @@ describe("Embed flow > forward and backward navigation", () => {
       jwtReady: true,
       initialState: { isGuest: true, useExistingUserSession: true },
     });
-    await settlePendingUpdates();
 
-    expect(screen.getByDisplayValue("guest-embed")).toBeChecked();
+    expect(await screen.findByDisplayValue("guest-embed")).toBeChecked();
     expect(screen.getByDisplayValue("sso")).not.toBeChecked();
   });
 
@@ -377,9 +370,8 @@ describe("Embed flow > forward and backward navigation", () => {
 
     it("shows a warning on the authentication card when SSO is selected but not configured", async () => {
       setup({ simpleEmbeddingEnabled: true, jwtReady: false });
-      await settlePendingUpdates();
 
-      expect(screen.getByDisplayValue("sso")).toBeChecked();
+      expect(await screen.findByDisplayValue("sso")).toBeChecked();
       expect(screen.getByText("Authentication")).toBeInTheDocument();
       expect(screen.getByText(warningText)).toBeInTheDocument();
     });
@@ -394,7 +386,10 @@ describe("Embed flow > forward and backward navigation", () => {
 
     it("hides the warning when SSO is configured", async () => {
       setup({ simpleEmbeddingEnabled: true, jwtReady: true });
-      await settlePendingUpdates();
+
+      // The card has to be on screen before the absence of its warning means
+      // anything.
+      await screen.findAllByRole("radio");
 
       expect(screen.queryByText(warningText)).not.toBeInTheDocument();
     });
@@ -425,9 +420,8 @@ describe("Embed flow > forward and backward navigation", () => {
 
   it("disables next and back buttons when simple embedding is disabled", async () => {
     setup({ simpleEmbeddingEnabled: false });
-    await settlePendingUpdates();
 
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Next" })).toBeDisabled();
     expect(
       screen.queryByRole("button", { name: "Back" }),
     ).not.toBeInTheDocument();
@@ -452,10 +446,9 @@ describe("Embed flow > forward and backward navigation", () => {
         resourceId: 456,
       },
     });
-    await settlePendingUpdates();
 
     // Starts at the "select embed options" step.
-    expect(screen.getByText("Behavior")).toBeInTheDocument();
+    expect(await screen.findByText("Behavior")).toBeInTheDocument();
     expect(screen.getByText("Appearance")).toBeInTheDocument();
 
     expect(
@@ -484,11 +477,10 @@ describe("Embed flow > Pro feature upsell indicators", () => {
         resourceId: 456,
       },
     });
-    await settlePendingUpdates();
 
     // All Pro-gated checkboxes should be disabled
     expect(
-      screen.getByRole("checkbox", {
+      await screen.findByRole("checkbox", {
         name: "Allow people to drill through on data points",
       }),
     ).toBeDisabled();
