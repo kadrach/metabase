@@ -347,6 +347,15 @@
       :sqlserver "SELECT * FROM t WITH (NOLOCK)"
       :postgres  "SELECT currval('seq')")))
 
+(deftest ^:parallel read-only-select?-large-literal-list-test
+  (let [tuples (str/join ", " (repeat 105 "(1)"))]
+    (testing "a second statement that literal-list stripping would fold into a comment is not missed"
+      (is (false? (sql-tools/read-only-select?
+                   :postgres
+                   (str "SELECT 1 /* VALUES ( */; DROP TABLE t; /* ), " tuples " */")))))
+    (testing "a literal list too large to parse whole is refused rather than parsed stripped"
+      (is (false? (sql-tools/read-only-select? :postgres (str "SELECT x FROM (VALUES " tuples ") AS v(x)")))))))
+
 (deftest ^:parallel read-only-select?-druid-test
   (testing "a Druid SELECT is read in the dialect sqlglot registers for Druid"
     (is (true? (sql-tools/read-only-select? :druid-jdbc "SELECT __time, COUNT(*) FROM wikipedia GROUP BY 1")))))
