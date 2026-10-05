@@ -331,3 +331,7 @@
           "SELECT ("
           ""
           ";")))))
+
+(deftest ^:parallel read-only-select?-druid-test
+  (testing "a Druid SELECT is read in the dialect sqlglot registers for Druid"
+    (is (true? (sql-tools/read-only-select? :druid-jdbc "SELECT __time, COUNT(*) FROM wikipedia GROUP BY 1")))))
