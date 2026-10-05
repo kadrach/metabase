@@ -12,7 +12,11 @@
    ;; Tests redefine `process-query` here, not in `metabase.query-processor.core`. The core var is a potemkin copy of
    ;; this one, so once other tests have patched both, redefining the copy no longer takes effect.
    [metabase.query-processor :as qp]
-   [metabase.test :as mt]))
+   [metabase.query-processor.pipeline :as qp.pipeline]
+   [metabase.sql-tools.core :as sql-tools]
+   [metabase.test :as mt]
+   [metabase.util :as u]
+   [toucan2.core :as t2]))
 
 (defn- run-tool!
   "Call `run_query` as rasta with `queries` in conversation state and query execution enabled."
@@ -392,3 +396,27 @@
                  "/* leading */ SELECT 1 AS N; -- trailing"]]
       (testing sql
         (is (true? (second (run-sql-recording! (mt/native-query {:query sql})))))))))
+
+(deftest run-query-runs-checked-sql-test
+  (testing "a snippet that turns into a write after the check is not run"
+    (mt/with-temp [:model/NativeQuerySnippet {snippet-id :id} {:name "body" :content "SELECT 1 AS N"}]
+      (let [query          {:database (mt/id)
+                            :type     :native
+                            :native   {:query         "{{snippet: body}}"
+                                       :template-tags {"snippet: body" {:name         "snippet: body"
+                                                                        :display-name "Body"
+                                                                        :type         :snippet
+                                                                        :snippet-name "body"
+                                                                        :snippet-id   snippet-id}}}}
+            read-only?     sql-tools/read-only-select?
+            driver-ran-sql (atom [])]
+        (mt/with-dynamic-fn-redefs [sql-tools/read-only-select? (fn [driver sql]
+                                                                  (u/prog1 (read-only? driver sql)
+                                                                    (t2/update! :model/NativeQuerySnippet snippet-id
+                                                                                {:content "SELECT 2 AS N FOR UPDATE"})))]
+          (binding [qp.pipeline/*execute* (fn [_driver query respond]
+                                            (swap! driver-ran-sql conj (get-in query [:native :query]))
+                                            (respond {:cols [{:name "N"}]} []))]
+            (is (str/includes? (:output (run-sql-tool! {"q1" query} {:query_id "q1"}))
+                               (not-read-only-output "q1")))))
+        (is (= [] @driver-ran-sql))))))

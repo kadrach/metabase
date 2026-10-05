@@ -18,6 +18,7 @@
    [metabase.metabot.tools.util :as tools.u]
    [metabase.models.interface :as mi]
    [metabase.query-processor.compile :as qp.compile]
+   [metabase.query-processor.pipeline :as qp.pipeline]
    [metabase.sql-tools.core :as sql-tools]
    [metabase.util :as u]
    [metabase.util.malli :as mu]))
@@ -175,22 +176,27 @@
                        :query-error  (ex-message e)}
                       e)))))
 
+(defn- not-read-only-select
+  [query-id]
+  (ex-info (str "run_query only runs a single read-only SELECT statement, and query " query-id " is not one. "
+                "Rewrite it as one SELECT that changes and locks nothing. " notebook-query-hint)
+           {:agent-error? true}))
+
 (defn- check-read-only-select!
   "Refuse `query` unless the SQL it compiles to is a single read-only SELECT statement in its database's dialect
    ([[sql-tools/read-only-select?]]). An admin's setting lets Metabot run SQL, never write: SQL that does not parse,
-   or a native query that is not SQL at all, is refused too."
+   or a native query that is not SQL at all, is refused too. Returns the checked SQL."
   [query-id query]
   (let [sql (compiled-sql query)]
     (when-not (and (string? sql)
                    (sql-tools/read-only-select? (driver.u/database->driver (:database query)) sql))
-      (throw (ex-info (str "run_query only runs a single read-only SELECT statement, and query " query-id " is not one. "
-                           "Rewrite it as one SELECT that changes and locks nothing. " notebook-query-hint)
-                      {:agent-error? true})))))
+      (throw (not-read-only-select query-id)))
+    sql))
 
 (defn- runnable-query
-  "The serialized MBQL 5 form of the query stored under `query-id`, which state may hold as MBQL 4 (the user's
-   viewing context) or MBQL 5. A SQL query passes [[check-sql-runnable!]] before anything else touches it, and
-   [[check-read-only-select!]] once it is serialized.
+  "`{:query :checked-sql}`: the serialized MBQL 5 form of the query stored under `query-id`, which state may hold as
+   MBQL 4 (the user's viewing context) or MBQL 5, and for a SQL query the SQL it compiled to. A SQL query passes
+   [[check-sql-runnable!]] before anything else touches it, and [[check-read-only-select!]] once it is serialized.
    The query's parameters, its bound filter and template-tag values, are kept: serializing strips them as runtime-only,
    and without them the model would read a broader result than the one the user sees."
   [query-id query]
@@ -210,9 +216,25 @@
         (check-sql-runnable! query-id (:database normalized)))
       (let [serialized (cond-> (lib/prepare-for-serialization normalized)
                          (seq (:parameters normalized)) (assoc :parameters (:parameters normalized)))]
-        (when (or native? (lib/any-native-stage? normalized))
-          (check-read-only-select! query-id serialized))
-        serialized))))
+        {:query       serialized
+         :checked-sql (when (or native? (lib/any-native-stage? normalized))
+                        (check-read-only-select! query-id serialized))}))))
+
+(defn- execute-page!
+  "Run `query` for one page of rows. With `checked-sql`, the driver runs only that SQL or other SQL that is itself a
+   read-only SELECT: the QP compiles the query again, and a snippet or card it references may have changed since
+   `checked-sql` was compiled from it."
+  [query-id {:keys [query checked-sql]} row-limit]
+  (if-not checked-sql
+    (query-execution/execute-page! query row-limit :metabot)
+    (let [execute qp.pipeline/*execute*]
+      (binding [qp.pipeline/*execute* (fn [driver native-query respond]
+                                        (let [sql (get-in native-query [:native :query])]
+                                          (when-not (or (= checked-sql sql)
+                                                        (and (string? sql) (sql-tools/read-only-select? driver sql)))
+                                            (throw (not-read-only-select query-id))))
+                                        (execute driver native-query respond))]
+        (query-execution/execute-page! query row-limit :metabot)))))
 
 (defn- cell-text
   [value]
@@ -282,8 +304,9 @@
   (try
     (when-not (metabot.settings/metabot-query-execution-enabled?)
       (throw (ex-info "Query execution is turned off for Metabot." {:agent-error? true})))
-    (let [page (-> (runnable-query query_id (stored-query query_id))
-                   (query-execution/execute-page! (or row_limit default-row-limit) :metabot))]
+    (let [page (execute-page! query_id
+                              (runnable-query query_id (stored-query query_id))
+                              (or row_limit default-row-limit))]
       {:output            (result-output query_id page)
        :structured-output {:query-id   query_id
                            :returned   (:returned page)
