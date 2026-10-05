@@ -329,3 +329,66 @@
                                       "type"       "native"
                                       "native"     {"query" "SELECT 1 AS N"}}}
                                {:query_id "q1"})))))))
+
+(defn- not-read-only-output
+  [query-id]
+  (str "run_query only runs a single read-only SELECT statement, and query " query-id " is not one. "
+       "Rewrite it as one SELECT that changes and locks nothing. " notebook-query-hint))
+
+(defn- run-sql-recording!
+  "Run `query` as q1 with SQL execution on, the QP stubbed out. Returns `[output ran?]`."
+  [query]
+  (let [ran? (atom false)]
+    (mt/with-dynamic-fn-redefs [qp/process-query (fn [_query]
+                                                   (reset! ran? true)
+                                                   {:status :completed :data {:cols [] :rows []}})]
+      [(:output (run-sql-tool! {"q1" query} {:query_id "q1"})) @ran?])))
+
+(deftest run-query-read-only-select-test
+  (testing "SQL other than a single read-only SELECT is refused before anything runs"
+    (doseq [sql ["SELECT 1; DROP TABLE VENUES"
+                 "INSERT INTO VENUES (NAME) VALUES ('x')"
+                 "UPDATE VENUES SET NAME = 'x'"
+                 "DELETE FROM VENUES"
+                 "MERGE INTO VENUES v USING CATEGORIES c ON v.ID = c.ID WHEN MATCHED THEN UPDATE SET NAME = c.NAME"
+                 "TRUNCATE TABLE VENUES"
+                 "CREATE TABLE T (A INT)"
+                 "DROP TABLE VENUES"
+                 "ALTER TABLE VENUES ADD COLUMN B INT"
+                 "GRANT SELECT ON VENUES TO PUBLIC"
+                 "CALL p()"
+                 "EXEC p"
+                 "EXECUTE p"
+                 "SET search_path TO x"
+                 "COPY VENUES TO '/tmp/venues'"
+                 "SELECT * INTO T2 FROM VENUES"
+                 "WITH d AS (DELETE FROM VENUES RETURNING *) SELECT * FROM d"
+                 "SELECT * FROM VENUES FOR UPDATE"
+                 "SELECT * FROM VENUES FOR SHARE"
+                 "SELECT ("]]
+      (testing sql
+        (is (= [(not-read-only-output "q1") false]
+               (run-sql-recording! (mt/native-query {:query sql})))))))
+  (testing "a native stage nested in a notebook query is checked too"
+    (is (= [(not-read-only-output "q1") false]
+           (run-sql-recording! {:database (mt/id)
+                                :type     :query
+                                :query    {:source-query {:native "DELETE FROM VENUES RETURNING *"}}}))))
+  (testing "a write inside an optional clause is refused once its value is bound"
+    (is (= [(not-read-only-output "q1") false]
+           (run-sql-recording! {:database   (mt/id)
+                                :type       "native"
+                                :native     {:query         "SELECT 1 [[; DROP TABLE VENUES -- {{x}}]]"
+                                             :template-tags {"x" {:id "x-tag" :name "x" :display-name "X" :type "number"}}}
+                                :parameters [{:type   "number/="
+                                              :target ["variable" ["template-tag" "x"]]
+                                              :value  [1]}]}))))
+  (testing "a single read-only SELECT runs"
+    (doseq [sql ["SELECT ID FROM VENUES"
+                 "WITH v AS (SELECT ID FROM VENUES) SELECT ID, ROW_NUMBER() OVER (ORDER BY ID) AS RN FROM v"
+                 "SELECT 1 AS N UNION SELECT 2 INTERSECT SELECT 2 EXCEPT SELECT 3"
+                 "SELECT 1 AS N;"
+                 "-- leading\nSELECT 1 AS N -- trailing"
+                 "/* leading */ SELECT 1 AS N; -- trailing"]]
+      (testing sql
+        (is (true? (second (run-sql-recording! (mt/native-query {:query sql})))))))))

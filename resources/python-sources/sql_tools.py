@@ -1863,18 +1863,37 @@ def _split_placeholder_casts(sql: str, dialect: str = None) -> str:
     return sql
 
 
+# Nodes that write, lock, or run something other than a query. A SELECT can hold some of these: `SELECT ... INTO`
+# creates a table, `FOR UPDATE`/`FOR SHARE` take row locks, and Postgres lets a CTE body be a DELETE ... RETURNING.
+_NOT_READ_ONLY_NODES = (
+    exp.DML, exp.DDL, exp.Into, exp.Lock, exp.Command, exp.Set, exp.Grant, exp.Revoke, exp.Drop, exp.Alter,
+    exp.TruncateTable, exp.Transaction, exp.Commit, exp.Rollback, exp.Use, exp.Execute, exp.LoadData, exp.Kill,
+    exp.Pragma, exp.Cache, exp.Uncache, exp.Refresh, exp.Analyze,
+)
+
+
+def _read_only(stmt: exp.Expression) -> bool:
+    return not any(isinstance(node, _NOT_READ_ONLY_NODES) for node in stmt.walk())
+
+
 def is_single_stmt_of_type(sql: str, stmt_type: str = "read", dialect: str = None) -> str:
     """Validates that a query is a single read statement (SELECT) or a single write statement (INSERT, UPDATE, DELETE)
     and returns the query reconstructed from the parsed AST.
+
+    `stmt_type` "read-only" is stricter than "read": the SELECT must also hold nothing that writes or locks anywhere in
+    its tree, and statements holding only a comment after the last semicolon are not counted.
     """
     result = {"is_single_stmt?": False, "allowed_stmt_type?": False}
     try:
         stmts = sqlglot.parse(_split_placeholder_casts(sql, dialect), read=dialect)
         allowed_types = (exp.Select, exp.SetOperation)
-        if stmt_type != "read": allowed_types = (exp.Update, exp.Insert, exp.Delete)
+        if stmt_type == "read-only":
+            stmts = [s for s in stmts if s is not None and not isinstance(s, exp.Semicolon)]
+        elif stmt_type != "read":
+            allowed_types = (exp.Update, exp.Insert, exp.Delete)
         if len(stmts) == 1:
             result["is_single_stmt?"] = True
-            if isinstance(stmts[0], allowed_types):
+            if isinstance(stmts[0], allowed_types) and (stmt_type != "read-only" or _read_only(stmts[0])):
                 result["allowed_stmt_type?"] = True
             result["sql"] = stmts[0].sql(dialect=dialect) if dialect else stmts[0].sql()
     except Exception as e:

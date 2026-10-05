@@ -569,7 +569,8 @@
 
 (defn is-single-stmt-of-type?
   "Validates that a query is a single read statement (SELECT) or a single write statement (INSERT, UPDATE, DELETE)
-   and returns the query reconstructed from the parsed AST."
+   and returns the query reconstructed from the parsed AST. `stmt-type` is \"read\", \"write\", or \"read-only\": a
+   read statement that also holds nothing that writes or locks anywhere in its tree."
   [dialect sql stmt-type]
   (let [stripped-sql (strip-large-literal-lists sql)
         result (-> (protocol/single-stmt-of-type (parser) dialect stripped-sql stmt-type)

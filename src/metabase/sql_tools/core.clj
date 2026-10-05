@@ -236,3 +236,11 @@
   "Wrapper around `sql-parsing/is-single-stmt-of-type?`."
   [driver sql stmt-type]
   (sql-parsing/is-single-stmt-of-type? (sqlglot/driver->dialect driver) sql stmt-type))
+
+(mu/defn read-only-select? :- :boolean
+  "Whether `sql` is exactly one plain query, a SELECT or a set operation of SELECTs, that neither writes nor locks
+  anywhere in its tree: no `SELECT ... INTO`, no `FOR UPDATE` or `FOR SHARE`, and no data-modifying CTE body.
+  Comments and a trailing semicolon are allowed. SQL that does not parse in `driver`'s dialect is not read-only."
+  [driver :- :keyword
+   sql    :- :string]
+  (true? (:allowed-stmt-type? (is-single-stmt-of-type? driver sql "read-only"))))

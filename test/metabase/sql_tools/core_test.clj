@@ -293,3 +293,41 @@
         query true true
         (str "SELECT 1; " query) false false
         (str query "; SELECT 1") false false))))
+
+(deftest ^:parallel read-only-select?-test
+  (doseq [driver [:postgres :mysql :h2]]
+    (testing driver
+      (testing "a single plain query is read-only"
+        (are [sql] (true? (sql-tools/read-only-select? driver sql))
+          "SELECT * FROM t"
+          "WITH x AS (SELECT a FROM t) SELECT a, ROW_NUMBER() OVER (ORDER BY a) FROM x"
+          "SELECT a FROM t UNION SELECT a FROM u INTERSECT SELECT a FROM v EXCEPT SELECT a FROM w"
+          "SELECT * FROM (SELECT 1) s WHERE a IN (SELECT b FROM u)"
+          "SELECT 1;"
+          "-- leading\nSELECT 1 -- trailing"
+          "/* leading */ SELECT 1; -- trailing"))
+      (testing "anything else is not"
+        (are [sql] (false? (sql-tools/read-only-select? driver sql))
+          "SELECT 1; DROP TABLE t"
+          "SELECT 1; SELECT 2"
+          "INSERT INTO t VALUES (1)"
+          "UPDATE t SET a = 1"
+          "DELETE FROM t"
+          "MERGE INTO t USING u ON t.id = u.id WHEN MATCHED THEN UPDATE SET a = u.a"
+          "TRUNCATE TABLE t"
+          "CREATE TABLE t (a INT)"
+          "DROP TABLE t"
+          "ALTER TABLE t ADD COLUMN b INT"
+          "GRANT SELECT ON t TO u"
+          "CALL p()"
+          "EXEC p"
+          "EXECUTE p"
+          "SET search_path TO x"
+          "COPY t TO '/tmp/t'"
+          "SELECT * INTO t2 FROM t"
+          "WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d"
+          "SELECT * FROM t FOR UPDATE"
+          "SELECT * FROM t FOR SHARE"
+          "SELECT ("
+          ""
+          ";")))))
