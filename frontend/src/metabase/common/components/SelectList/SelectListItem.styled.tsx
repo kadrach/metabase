@@ -4,6 +4,7 @@ import { css } from "@emotion/react";
 import styled from "@emotion/styled";
 
 import { Text, type TextProps } from "metabase/ui";
+import { maybeColor } from "metabase/ui/utils/colors";
 
 import { EntityIcon } from "../EntityIcon";
 
@@ -13,9 +14,11 @@ export const ItemTitle = styled(Text)<TextProps>`
   word-break: break-word;
 ` as unknown as typeof Text;
 
-export const ItemIcon = styled(EntityIcon)`
+export const ItemIcon = styled(EntityIcon, {
+  shouldForwardProp: (prop) => prop !== "color",
+})`
   justify-self: end;
-  color: var(--mb-color-core-brand);
+  color: ${({ color = "core-brand" }) => maybeColor(color)};
 `;
 
 const activeItemCss = css`
