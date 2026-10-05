@@ -3081,7 +3081,6 @@
            lib.types
            metabot
            metrics
-           models
            permissions
            queries
            system
