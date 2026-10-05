@@ -1868,12 +1868,38 @@ def _split_placeholder_casts(sql: str, dialect: str = None) -> str:
 _NOT_READ_ONLY_NODES = (
     exp.DML, exp.DDL, exp.Into, exp.Lock, exp.Command, exp.Set, exp.Grant, exp.Revoke, exp.Drop, exp.Alter,
     exp.TruncateTable, exp.Transaction, exp.Commit, exp.Rollback, exp.Use, exp.Execute, exp.LoadData, exp.Kill,
-    exp.Pragma, exp.Cache, exp.Uncache, exp.Refresh, exp.Analyze,
+    exp.Pragma, exp.Cache, exp.Uncache, exp.Refresh, exp.Analyze, exp.NextValueFor,
+)
+
+# Advancing a sequence is a write a SELECT can make. sqlglot parses only the SQL-standard `NEXT VALUE FOR` as its
+# own node; Postgres and Redshift spell it as a function, Oracle and Snowflake as a `.NEXTVAL` pseudo-column.
+_SEQUENCE_WRITE_FUNCTIONS = frozenset({"nextval", "setval"})
+
+# SQL Server table hints that take update or exclusive locks, or hold shared ones to the end of the transaction.
+# `NOLOCK`, `INDEX(...)` and the rest only steer how a plain read runs.
+_LOCKING_TABLE_HINTS = frozenset(
+    {"UPDLOCK", "XLOCK", "TABLOCK", "TABLOCKX", "HOLDLOCK", "SERIALIZABLE", "REPEATABLEREAD"}
 )
 
 
+def _writes_or_locks(node: exp.Expression) -> bool:
+    if isinstance(node, _NOT_READ_ONLY_NODES):
+        return True
+    if isinstance(node, exp.Anonymous):
+        return node.name.lower() in _SEQUENCE_WRITE_FUNCTIONS
+    if isinstance(node, exp.Column):
+        return bool(node.table) and node.name.lower() == "nextval"
+    if isinstance(node, exp.WithTableHint):
+        return any(hint.name.upper() in _LOCKING_TABLE_HINTS for hint in node.expressions)
+    return False
+
+
+# Any other function with side effects, a user-defined one included, passes this check: no list of names can be
+# complete. Grants on the database credential are what keep such a function from writing. The read-only flag on the
+# QP's connection does not on every driver: the Postgres driver applies it only to a transaction, and the QP runs a
+# read under autocommit.
 def _read_only(stmt: exp.Expression) -> bool:
-    return not any(isinstance(node, _NOT_READ_ONLY_NODES) for node in stmt.walk())
+    return not any(_writes_or_locks(node) for node in stmt.walk())
 
 
 def is_single_stmt_of_type(sql: str, stmt_type: str = "read", dialect: str = None) -> str:

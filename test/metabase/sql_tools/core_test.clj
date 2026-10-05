@@ -332,6 +332,21 @@
           ""
           ";")))))
 
+(deftest ^:parallel read-only-select?-side-effects-test
+  (testing "a SELECT that advances a sequence or takes locks through a table hint is not read-only"
+    (are [driver sql] (false? (sql-tools/read-only-select? driver sql))
+      :sqlserver "SELECT NEXT VALUE FOR dbo.seq"
+      :sqlserver "SELECT * FROM t WITH (UPDLOCK)"
+      :sqlserver "SELECT * FROM t WITH (ROWLOCK, XLOCK)"
+      :postgres  "SELECT nextval('seq')"
+      :postgres  "SELECT SETVAL('seq', 1)"
+      :oracle    "SELECT seq.NEXTVAL FROM dual"
+      :snowflake "SELECT seq.nextval"))
+  (testing "reading a sequence or hinting a plain read is read-only"
+    (are [driver sql] (true? (sql-tools/read-only-select? driver sql))
+      :sqlserver "SELECT * FROM t WITH (NOLOCK)"
+      :postgres  "SELECT currval('seq')")))
+
 (deftest ^:parallel read-only-select?-druid-test
   (testing "a Druid SELECT is read in the dialect sqlglot registers for Druid"
     (is (true? (sql-tools/read-only-select? :druid-jdbc "SELECT __time, COUNT(*) FROM wikipedia GROUP BY 1")))))
