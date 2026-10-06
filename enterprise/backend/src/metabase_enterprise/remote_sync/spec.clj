@@ -13,7 +13,6 @@
   (:require
    [clojure.set :as set]
    [clojure.string :as str]
-   [metabase-enterprise.data-apps.core :as data-apps]
    [metabase-enterprise.remote-sync.db :as remote-sync.db]
    [metabase-enterprise.remote-sync.settings :as rs-settings]
    [metabase-enterprise.transforms-python.core :as transforms-python]
@@ -702,6 +701,11 @@
   [object]
   (= (keyword (:namespace object)) :snippets))
 
+(defn data-apps-namespace-collection?
+  "Check if this is a data-apps-namespace collection: a data app's resource collection, synced with the app."
+  [object]
+  (= (keyword (:namespace object)) collections/data-apps-ns))
+
 (defn library-collection?
   "Check if this is the Library collection."
   [collection]
@@ -716,7 +720,7 @@
            (transforms-namespace-collection? collection))
       (and (rs-settings/library-is-remote-synced?)
            (snippets-namespace-collection? collection))
-      (data-apps/resource-collection? (:id collection))))
+      (data-apps-namespace-collection? collection)))
 
 (defn all-syncable-collection-ids
   "Returns a vector of all collection IDs that are eligible for remote sync.
@@ -724,7 +728,7 @@
    - Collections with is_remote_synced=true
    - Transforms-namespace collections (when remote-sync-transforms setting is enabled)
    - Snippets-namespace collections (when Library is remote-synced)
-   - Data apps' resource collections
+   - Data-apps-namespace collections (data apps are synced globally)
 
    Used by import cleanup to determine which collections to scope deletions to."
   []
@@ -735,7 +739,7 @@
            (remote-sync.db/collection-ids-in-namespace (name collections/transforms-ns)))
          (when (rs-settings/library-is-remote-synced?)
            (remote-sync.db/collection-ids-in-namespace "snippets"))
-         (data-apps/resource-collection-ids)]))
+         (remote-sync.db/collection-ids-in-namespace (name collections/data-apps-ns))]))
 
 (def ^:private max-conflict-names
   "Cap on how many entity names a collection deletion conflict carries, so the payload stays bounded when
@@ -810,16 +814,14 @@
         (check-eligibility-by-type spec object))))
 
 (defmethod check-eligibility-by-type :collection
-  [{:keys [eligibility model-key]} object]
+  [{:keys [eligibility]} object]
   (let [collection-type (:collection eligibility)
         collection-id   (:collection_id object)]
     (case collection-type
       :remote-synced
       (or (collections/remote-synced-collection? collection-id)
-          ;; a card or action in a data app's collection is synced with the app
-          (and (some? collection-id)
-               (contains? #{:model/Card :model/Action} model-key)
-               (data-apps/resource-collection? collection-id)))
+          ;; what sits in a data app's collection is synced with the app
+          (data-apps-namespace-collection? {:namespace (remote-sync.db/collection-namespace collection-id)}))
 
       :transforms-namespace
       (and (rs-settings/remote-sync-transforms)
@@ -834,7 +836,8 @@
           (and (rs-settings/remote-sync-transforms)
                (transforms-namespace-collection? object))
           (and (rs-settings/library-is-remote-synced?)
-               (snippets-namespace-collection? object)))
+               (snippets-namespace-collection? object))
+          (data-apps-namespace-collection? object))
 
       false)))
 
@@ -1225,7 +1228,7 @@
          (collection-keys (remote-sync.db/unarchived-root-collection-ids-in-namespace (name collections/transforms-ns))))
        (when (rs-settings/library-is-remote-synced?)
          (collection-keys (remote-sync.db/unarchived-root-collection-ids-in-namespace "snippets")))
-       (collection-keys (data-apps/unarchived-resource-collection-ids))))
+       (collection-keys (remote-sync.db/unarchived-root-collection-ids-in-namespace (name collections/data-apps-ns)))))
     :derived
     nil))
 
