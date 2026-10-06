@@ -32,6 +32,7 @@ import { initializePlugin as initializeGroupManagers } from "./group_managers";
 import { initializePlugin as initializeMetabot } from "./metabot";
 import { initializePlugin as initializeModelPersistence } from "./model_persistence";
 import { initializePlugin as initializeModeration } from "./moderation";
+import { initializePlugin as initializeMonitorApiKeyUsage } from "./monitor/api-key-usage";
 import { initializePlugin as initializeMonitorDependencyDiagnostics } from "./monitor/dependency-diagnostics";
 import { initializePlugin as initializeTools } from "./monitor/tools";
 import { initializePlugin as initializeMultiFactorAuth } from "./multi_factor_auth";
@@ -87,6 +88,7 @@ export function initializePlugins() {
   initializeMetabot();
   initializeModelPersistence();
   initializeModeration();
+  initializeMonitorApiKeyUsage();
   initializeMonitorDependencyDiagnostics();
   initializeMultiFactorAuth();
   initializeRemoteSync();

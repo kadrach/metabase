@@ -2863,6 +2863,7 @@
            metabase.testing-api.init}
    :uses #{analytics
            api
+           api-keys
            app-db
            lib
            lib.be
