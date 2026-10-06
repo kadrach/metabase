@@ -340,12 +340,35 @@
       :sqlserver "SELECT * FROM t WITH (ROWLOCK, XLOCK)"
       :postgres  "SELECT nextval('seq')"
       :postgres  "SELECT SETVAL('seq', 1)"
+      :sqlserver "SELECT * FROM t (TABLOCKX)"
       :oracle    "SELECT seq.NEXTVAL FROM dual"
-      :snowflake "SELECT seq.nextval"))
+      :snowflake "SELECT seq.nextval"
+      :snowflake "SELECT 1 FROM TABLE(GETNEXTVAL(seq))"))
   (testing "reading a sequence or hinting a plain read is read-only"
     (are [driver sql] (true? (sql-tools/read-only-select? driver sql))
       :sqlserver "SELECT * FROM t WITH (NOLOCK)"
+      :sqlserver "SELECT * FROM dbo.fn(1)"
       :postgres  "SELECT currval('seq')")))
+
+(deftest ^:parallel read-only-select?-hidden-sql-test
+  (testing "SQL the database would run and the parser reads as something else is not read-only"
+    (are [driver sql] (false? (sql-tools/read-only-select? driver sql))
+      ;; SQL Server ends the SELECT at a statement word, with no semicolon
+      :sqlserver "SELECT 1 FROM t EXEC('DROP TABLE x')"
+      :sqlserver "SELECT * FROM t SHUTDOWN"
+      :sqlserver "SELECT * FROM t WAITFOR DELAY '00:00:10'"
+      ;; MySQL runs the body of an executable comment, and reads -- as a comment only before whitespace
+      :mysql     "SELECT * FROM t /*! FOR UPDATE */"
+      :mysql     "SELECT 1 /*!50000 INTO OUTFILE '/tmp/x' */"
+      :mysql     "SELECT id --1 FROM t FOR UPDATE"))
+  (testing "the same words and marks are allowed where the database reads them as the parser does"
+    (are [driver sql] (true? (sql-tools/read-only-select? driver sql))
+      :sqlserver "SELECT [update], 'drop it' FROM t ORDER BY 1 OFFSET 0 ROWS FETCH NEXT 5 ROWS ONLY"
+      :sqlserver "SELECT CASE WHEN x = 1 THEN 'a' ELSE 'b' END FROM t"
+      :mysql     "SELECT a - -1 FROM t"
+      :mysql     "SELECT a /* plain */ FROM t -- trailing"
+      :postgres  "SELECT a --no space\n FROM t"
+      :postgres  "SELECT 1 AS exec")))
 
 (deftest ^:parallel read-only-select?-large-literal-list-test
   (let [tuples (str/join ", " (repeat 105 "(1)"))]

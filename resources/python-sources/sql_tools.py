@@ -1872,8 +1872,9 @@ _NOT_READ_ONLY_NODES = (
 )
 
 # Advancing a sequence is a write a SELECT can make. sqlglot parses only the SQL-standard `NEXT VALUE FOR` as its
-# own node; Postgres and Redshift spell it as a function, Oracle and Snowflake as a `.NEXTVAL` pseudo-column.
-_SEQUENCE_WRITE_FUNCTIONS = frozenset({"nextval", "setval"})
+# own node; Postgres and Redshift spell it as a function, Oracle and Snowflake as a `.NEXTVAL` pseudo-column, and
+# Snowflake also as the table function `TABLE(GETNEXTVAL(seq))`.
+_SEQUENCE_WRITE_FUNCTIONS = frozenset({"nextval", "setval", "getnextval"})
 
 # SQL Server table hints that take update or exclusive locks, or hold shared ones to the end of the transaction.
 # `NOLOCK`, `INDEX(...)` and the rest only steer how a plain read runs.
@@ -1891,6 +1892,44 @@ def _writes_or_locks(node: exp.Expression) -> bool:
         return bool(node.table) and node.name.lower() == "nextval"
     if isinstance(node, exp.WithTableHint):
         return any(hint.name.upper() in _LOCKING_TABLE_HINTS for hint in node.expressions)
+    # SQL Server still honours a hint written without WITH, `FROM t (TABLOCKX)`, which parses as a call to a
+    # table-valued function named `t`.
+    if isinstance(node, exp.Table) and isinstance(node.this, exp.Anonymous):
+        return any(
+            isinstance(arg, exp.Column) and not arg.table and arg.name.upper() in _LOCKING_TABLE_HINTS
+            for arg in node.this.expressions
+        )
+    return False
+
+
+# Words that start a T-SQL statement. SQL Server ends a SELECT at one of them without a semicolon, while sqlglot
+# reads a bare one as a table alias: `SELECT 1 FROM t EXEC('...')` parses as one SELECT and runs as two statements.
+# All are reserved words there, so a query can only use one as a name inside brackets or quotes.
+# `MERGE`, `FETCH` and `USE` are left out: they also appear in join hints, `OFFSET ... FETCH` and `USE HINT`.
+_TSQL_STATEMENT_WORDS = frozenset(
+    {
+        "ALTER", "BACKUP", "BEGIN", "BULK", "CHECKPOINT", "CLOSE", "COMMIT", "CREATE", "DBCC", "DEALLOCATE",
+        "DECLARE", "DELETE", "DENY", "DROP", "EXEC", "EXECUTE", "GOTO", "GRANT", "INSERT", "KILL", "OPEN", "PRINT",
+        "RAISERROR", "READTEXT", "RECONFIGURE", "RESTORE", "REVOKE", "ROLLBACK", "SAVE", "SET", "SHUTDOWN", "THROW",
+        "TRUNCATE", "UPDATE", "UPDATETEXT", "WAITFOR", "WRITETEXT",
+    }
+)
+
+# Dialects whose server runs the body of a `/*! ... */` comment as SQL, and reads `--` as a comment only when
+# whitespace follows it.
+_MYSQL_FAMILY_DIALECTS = frozenset({"mysql", "mariadb", "singlestore", "starrocks", "doris", "tidb"})
+
+
+def _hides_sql_from_parser(sql: str, dialect: str) -> bool:
+    """Whether `sql` holds text its database would run and sqlglot would not parse as a statement of its own."""
+    if dialect == "tsql":
+        quoted = (sqlglot.TokenType.STRING, sqlglot.TokenType.NATIONAL_STRING, sqlglot.TokenType.IDENTIFIER)
+        return any(
+            tok.token_type not in quoted and tok.text.upper() in _TSQL_STATEMENT_WORDS
+            for tok in sqlglot.tokenize(sql, read=dialect)
+        )
+    if dialect in _MYSQL_FAMILY_DIALECTS:
+        return "/*!" in sql or "/*M!" in sql or re.search(r"--(?=\S)", sql) is not None
     return False
 
 
@@ -1919,7 +1958,9 @@ def is_single_stmt_of_type(sql: str, stmt_type: str = "read", dialect: str = Non
             allowed_types = (exp.Update, exp.Insert, exp.Delete)
         if len(stmts) == 1:
             result["is_single_stmt?"] = True
-            if isinstance(stmts[0], allowed_types) and (stmt_type != "read-only" or _read_only(stmts[0])):
+            if isinstance(stmts[0], allowed_types) and (
+                stmt_type != "read-only" or (_read_only(stmts[0]) and not _hides_sql_from_parser(sql, dialect))
+            ):
                 result["allowed_stmt_type?"] = True
             result["sql"] = stmts[0].sql(dialect=dialect) if dialect else stmts[0].sql()
     except Exception as e:
