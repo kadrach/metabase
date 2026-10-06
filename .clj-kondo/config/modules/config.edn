@@ -3074,6 +3074,7 @@
   {:team "Embedding"
    :api #{metabase.typed-schemas.core}
    :uses #{actions
+           audit-app
            collections
            lib
            lib.be
@@ -3082,6 +3083,7 @@
            metabot
            metrics
            permissions
+           premium-features
            queries
            system
            util
