@@ -129,7 +129,10 @@ middleware's lookup doesn't pull in route code.
 
 Each app owns a collection containing its saved questions, models (containing actions), and table-sourced metrics.
 
-- Admins assign groups through the `/api/apps/:slug/groups` endpoint.
+- Admins can reuse existing internal permission groups to grant access to data apps through the
+  `/api/apps/:slug/groups` endpoint.
+- The relationship is many-to-many: an app can have multiple assigned groups, and a group can be
+  assigned to multiple apps.
 - Assignments are defined in the `data_app_group_assignment` table.
 - Users who belong to the assigned group can see the app in their sidebar, and are allowed to access them.
   - We show a 403 and an error page if a user without an assigned group tries to open an app directly.
