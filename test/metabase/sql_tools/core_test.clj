@@ -357,6 +357,7 @@
       :sqlserver "SELECT 1 FROM t EXEC('DROP TABLE x')"
       :sqlserver "SELECT * FROM t SHUTDOWN"
       :sqlserver "SELECT * FROM t WAITFOR DELAY '00:00:10'"
+      :sqlserver "SELECT * FROM t REVERT"
       ;; MySQL runs the body of an executable comment, and reads -- as a comment only before whitespace
       :mysql     "SELECT * FROM t /*! FOR UPDATE */"
       :mysql     "SELECT 1 /*!50000 INTO OUTFILE '/tmp/x' */"
@@ -367,6 +368,7 @@
       :sqlserver "SELECT CASE WHEN x = 1 THEN 'a' ELSE 'b' END FROM t"
       :mysql     "SELECT a - -1 FROM t"
       :mysql     "SELECT a /* plain */ FROM t -- trailing"
+      :mysql     "SELECT '--draft', '/*!', `a--b` FROM t"
       :postgres  "SELECT a --no space\n FROM t"
       :postgres  "SELECT 1 AS exec")))
 

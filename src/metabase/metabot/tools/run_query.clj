@@ -216,29 +216,34 @@
              (not (query-perms/can-run-query? query)))
     (throw (no-permission query-id))))
 
-(defn- reads-hidden-card?
-  "Whether `query` reads, at any depth, a saved question that is missing or that the current user can't read.
-   A user may run a question they can read even when it reads one they can't, so this is no refusal by itself."
+(defn- cards-read
+  "The ids of the saved questions `query` reads at any depth: as its source, in a join, in a template tag, through
+   a snippet, or through another saved question."
   [query]
-  (not-every? #(some-> (metabot.db/card %) mi/can-read?)
-              (lib/all-source-card-ids-recursive query)))
+  (:card (lib/all-referenced-entity-ids-recursive query)))
 
-(defn- reads-sql-card?
-  "Whether `query` reads a saved SQL question at any depth: as its source, in a join, or through another saved
-   question. The SQL of such a question runs inside the notebook query around it, so the query is a SQL query for
-   every check here, although no stage of `query` itself is native."
-  [query]
+(defn- hidden-card?
+  "Whether any of `card-ids` is missing or names a saved question the current user can't read.
+   A user may run a question they can read even when it reads one they can't, so this is no refusal by itself."
+  [card-ids]
+  (not-every? #(some-> (metabot.db/card %) mi/can-read?) card-ids))
+
+(defn- sql-card?
+  "Whether any of `card-ids`, the saved questions `query` reads, is a SQL question. The SQL of such a question
+   runs inside the notebook query around it, so the query is a SQL query for every check here, although no stage
+   of `query` itself is native."
+  [query card-ids]
   (boolean
    (some (fn [card-id]
            (some-> (lib.metadata/card query card-id) :dataset-query not-empty lib/any-native-stage?))
-         (lib/all-source-card-ids-recursive query))))
+         card-ids)))
 
 (defn- runnable-query
   "`{:query :checked-sql :sql-card?}`: the serialized MBQL 5 form of the query stored under `query-id`, which state
    may hold as MBQL 4 (the user's viewing context) or MBQL 5, and for a SQL query the SQL it compiled to.
    A SQL query passes [[check-sql-runnable!]] before anything else touches it, and [[check-read-only-select!]] once
    it is serialized.
-   A notebook query that reads a saved SQL question ([[reads-sql-card?]]) is a SQL query here too, marked `:sql-card?`.
+   A notebook query that reads a saved SQL question ([[sql-card?]]) is a SQL query here too, marked `:sql-card?`.
    The query's parameters, its bound filter and template-tag values, are kept: serializing strips them as runtime-only,
    and without them the model would read a broader result than the one the user sees."
   [query-id query]
@@ -257,13 +262,14 @@
       (when (and (not native?) (lib/any-native-stage? normalized))
         (check-sql-runnable! query-id (:database normalized) false))
       (check-cards-runnable! query-id normalized)
-      (let [inline-sql? (or native? (lib/any-native-stage? normalized))
-            sql-card?   (and (not inline-sql?) (reads-sql-card? normalized))
+      (let [card-ids    (cards-read normalized)
+            inline-sql? (or native? (lib/any-native-stage? normalized))
+            sql-card?   (and (not inline-sql?) (sql-card? normalized card-ids))
             serialized  (cond-> (lib/prepare-for-serialization normalized)
                           (seq (:parameters normalized)) (assoc :parameters (:parameters normalized)))]
         ;; Every refusal past this point says something about the SQL of the questions the query reads, and
         ;; compiling expands that SQL, so only a user who can read each of them gets that far.
-        (when (and (or inline-sql? sql-card?) (reads-hidden-card? normalized))
+        (when (and (or inline-sql? sql-card?) (hidden-card? card-ids))
           (throw (no-permission query-id)))
         (when sql-card?
           (check-sql-runnable! query-id (:database normalized) true))

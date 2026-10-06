@@ -1910,7 +1910,8 @@ _TSQL_STATEMENT_WORDS = frozenset(
     {
         "ALTER", "BACKUP", "BEGIN", "BULK", "CHECKPOINT", "CLOSE", "COMMIT", "CREATE", "DBCC", "DEALLOCATE",
         "DECLARE", "DELETE", "DENY", "DROP", "EXEC", "EXECUTE", "GOTO", "GRANT", "INSERT", "KILL", "OPEN", "PRINT",
-        "RAISERROR", "READTEXT", "RECONFIGURE", "RESTORE", "REVOKE", "ROLLBACK", "SAVE", "SET", "SHUTDOWN", "THROW",
+        "RAISERROR", "READTEXT", "RECONFIGURE", "RESTORE", "REVERT", "REVOKE", "ROLLBACK", "SAVE", "SET", "SHUTDOWN",
+        "THROW",
         "TRUNCATE", "UPDATE", "UPDATETEXT", "WAITFOR", "WRITETEXT",
     }
 )
@@ -1922,13 +1923,17 @@ _MYSQL_FAMILY_DIALECTS = frozenset({"mysql", "mariadb", "singlestore", "starrock
 
 def _hides_sql_from_parser(sql: str, dialect: str) -> bool:
     """Whether `sql` holds text its database would run and sqlglot would not parse as a statement of its own."""
+    quoted = (sqlglot.TokenType.STRING, sqlglot.TokenType.NATIONAL_STRING, sqlglot.TokenType.IDENTIFIER)
     if dialect == "tsql":
-        quoted = (sqlglot.TokenType.STRING, sqlglot.TokenType.NATIONAL_STRING, sqlglot.TokenType.IDENTIFIER)
         return any(
             tok.token_type not in quoted and tok.text.upper() in _TSQL_STATEMENT_WORDS
             for tok in sqlglot.tokenize(sql, read=dialect)
         )
     if dialect in _MYSQL_FAMILY_DIALECTS:
+        # Blank out string literals and quoted names first, where both marks are plain text.
+        for tok in sqlglot.tokenize(sql, read=dialect):
+            if tok.token_type in quoted:
+                sql = sql[: tok.start] + " " * (tok.end + 1 - tok.start) + sql[tok.end + 1 :]
         return "/*!" in sql or "/*M!" in sql or re.search(r"--(?=\S)", sql) is not None
     return False
 
