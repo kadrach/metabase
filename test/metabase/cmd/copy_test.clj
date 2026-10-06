@@ -88,6 +88,7 @@
     :model/ContentTranslation
     :model/DashboardFavorite
     :model/DataApp
+    :model/DataAppGroupAssignment
     :model/DataComplexityScore
     :model/DatabaseRouter
     :model/Dependency
