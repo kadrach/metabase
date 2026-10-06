@@ -99,7 +99,7 @@ export function CustomURLPicker({
         title={t`Enter a URL to link to`}
         size="lg"
       >
-        <Flex direction="column" gap="lg" mt="sm">
+        <Flex direction="column" gap="lg">
           <Text>
             {t`You can insert the value of a column or dashboard filter using its name, like this: {{some_column}}`}
           </Text>
@@ -117,9 +117,9 @@ export function CustomURLPicker({
             />
           )}
           <ValuesYouCanReference dashcard={dashcard} parameters={parameters} />
+        </Flex>
+        <Modal.Footer>
           <Button
-            ml="auto"
-            mt="xxl"
             variant="filled"
             type="button"
             onClick={() => {
@@ -128,7 +128,7 @@ export function CustomURLPicker({
             }}
             disabled={!canSelect}
           >{t`Done`}</Button>
-        </Flex>
+        </Modal.Footer>
       </Modal>
     </>
   );

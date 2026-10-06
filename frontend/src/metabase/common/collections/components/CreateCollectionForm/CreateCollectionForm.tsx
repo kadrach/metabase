@@ -5,7 +5,6 @@ import * as Yup from "yup";
 import { skipToken, useGetCollectionQuery } from "metabase/api";
 import FormCollectionPicker from "metabase/common/collections/containers/FormCollectionPicker";
 import { useInitialCollectionId } from "metabase/common/collections/hooks";
-import { FormFooter } from "metabase/common/components/FormFooter";
 import type {
   EntityPickerOptions,
   FilterItemsInPersonalCollection,
@@ -21,11 +20,13 @@ import {
 } from "metabase/forms";
 import { PLUGIN_TENANTS } from "metabase/plugins";
 import { useLocation, useParams } from "metabase/router";
-import { Button, Flex } from "metabase/ui";
+import { Button, Modal } from "metabase/ui";
 import * as Errors from "metabase/utils/errors";
 import type { Collection, CollectionNamespace } from "metabase-types/api";
 
 import { FormAuthorityLevelField } from "../../containers/FormAuthorityLevelFieldContainer";
+
+import S from "./CreateCollectionForm.module.css";
 
 const COLLECTION_SCHEMA = Yup.object({
   name: Yup.string()
@@ -158,21 +159,19 @@ function CreateCollectionForm({
               />
             )}
             {showAuthorityLevelPicker && !isParentTenantCollection && (
-              <FormAuthorityLevelField />
+              <FormAuthorityLevelField className={S.lastField} />
             )}
-            <FormFooter mt="xl">
-              <FormErrorMessage />
-              <Flex style={{ flexShrink: 1 }} justify="flex-end" gap="sm">
-                {!!onCancel && (
-                  <Button type="button" onClick={onCancel}>{t`Cancel`}</Button>
-                )}
-                <FormSubmitButton
-                  label={t`Create`}
-                  disabled={!dirty}
-                  variant="filled"
-                />
-              </Flex>
-            </FormFooter>
+            <Modal.Footer>
+              <FormErrorMessage flex={1} />
+              {!!onCancel && (
+                <Button type="button" onClick={onCancel}>{t`Cancel`}</Button>
+              )}
+              <FormSubmitButton
+                label={t`Create`}
+                disabled={!dirty}
+                variant="filled"
+              />
+            </Modal.Footer>
           </Form>
         );
       }}

@@ -9,7 +9,7 @@ import {
   FormSubmitButton,
   FormTextInput,
 } from "metabase/forms";
-import { Button, Group, Modal, Paper, Stack, Text } from "metabase/ui";
+import { Button, Modal, Paper, Stack, Text } from "metabase/ui";
 import type { CreateApiKeyRequest } from "metabase-types/api";
 
 import { useCreateApiKeyMutation } from "../../api/api-key";
@@ -40,7 +40,6 @@ export const CreateApiKeyModal = ({ onClose }: { onClose: () => void }) => {
     return (
       <Modal
         size="40rem"
-        padding="xxl"
         opened
         onClose={onClose}
         title={t`Create a new API key`}
@@ -76,12 +75,12 @@ export const CreateApiKeyModal = ({ onClose }: { onClose: () => void }) => {
               >
                 <Text c="text-secondary">{t`We don't version the Metabase API. We rarely change API endpoints, and almost never remove them, but if you write code that relies on the API, there's a chance you might have to update your code in the future.`}</Text>
               </Paper>
-              <FormErrorMessage />
-              <Group justify="flex-end">
-                <Button onClick={onClose}>{t`Cancel`}</Button>
-                <FormSubmitButton variant="filled" label={t`Create`} />
-              </Group>
             </Stack>
+            <Modal.Footer>
+              <FormErrorMessage flex={1} />
+              <Button onClick={onClose}>{t`Cancel`}</Button>
+              <FormSubmitButton variant="filled" label={t`Create`} />
+            </Modal.Footer>
           </Form>
         </FormProvider>
       </Modal>

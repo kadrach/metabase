@@ -18,13 +18,8 @@ export const GitSettingsModal = ({
       opened={isOpen}
       onClose={onClose}
       withCloseButton={false}
-      title={
-        <Text fw={700} size="1.5rem">
-          {t`Set up remote sync for your Library`}
-        </Text>
-      }
+      title={t`Set up remote sync for your Library`}
       size="xl"
-      padding="xxl"
     >
       <Text c="text-secondary" size="md" fw={400} lh="1.25rem" mb="xl">
         {t`Keep your Library and transforms safely backed up in Git.`}

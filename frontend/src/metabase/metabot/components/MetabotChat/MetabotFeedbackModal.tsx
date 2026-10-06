@@ -9,7 +9,7 @@ import { getMetabotId } from "metabase/metabot/state";
 import { useSelector } from "metabase/redux";
 import { getApplicationName } from "metabase/selectors/whitelabel";
 import { useSetting } from "metabase/settings";
-import { Button, Group, Modal, Stack, Text } from "metabase/ui";
+import { Button, Modal, Stack, Text } from "metabase/ui";
 import * as Errors from "metabase/utils/errors";
 import type { MetabotFeedback, MetabotIssueType } from "metabase-types/api";
 
@@ -136,16 +136,15 @@ export const MetabotFeedbackModal = ({
               {c("{0} is the name of the application, usually 'Metabase'")
                 .t`Please submit this report to ${applicationName}. Note that it may contain sensitive data from your conversation.`}
             </Text>
-
-            <Group justify="flex-end" gap="lg" mt="lg">
-              <Button variant="subtle" color="neutral" onClick={onClose}>
-                {t`Cancel`}
-              </Button>
-              <Button variant="filled" type="submit">{c(
-                "This is a verb, not a noun",
-              ).t`Submit`}</Button>
-            </Group>
           </Stack>
+          <Modal.Footer>
+            <Button variant="subtle" color="neutral" onClick={onClose}>
+              {t`Cancel`}
+            </Button>
+            <Button variant="filled" type="submit">{c(
+              "This is a verb, not a noun",
+            ).t`Submit`}</Button>
+          </Modal.Footer>
         </Form>
       </FormProvider>
     </Modal>

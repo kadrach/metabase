@@ -5,7 +5,6 @@ import * as Yup from "yup";
 import { useCreateDashboardMutation } from "metabase/api";
 import FormCollectionPicker from "metabase/common/collections/containers/FormCollectionPicker/FormCollectionPicker";
 import { useInitialCollectionId } from "metabase/common/collections/hooks";
-import { FormFooter } from "metabase/common/components/FormFooter";
 import {
   DASHBOARD_DESCRIPTION_MAX_LENGTH,
   DASHBOARD_NAME_MAX_LENGTH,
@@ -18,7 +17,7 @@ import {
   FormTextInput,
   FormTextarea,
 } from "metabase/forms";
-import { Button, Stack } from "metabase/ui";
+import { Button, Modal, Stack } from "metabase/ui";
 import * as Errors from "metabase/utils/errors";
 import type { CollectionId, Dashboard } from "metabase-types/api";
 
@@ -103,7 +102,6 @@ export function CreateDashboardForm({
             label={t`Name`}
             placeholder={t`What is the name of your dashboard?`}
             data-autofocus
-            mt="lg"
           />
           <FormTextarea
             labelProps={{ mb: "xxs" }}
@@ -123,13 +121,13 @@ export function CreateDashboardForm({
               entityType="dashboard"
             />
           )}
-          <FormFooter mt="lg">
-            <FormErrorMessage inline />
+          <Modal.Footer>
+            <FormErrorMessage flex={1} />
             {!!onCancel && (
               <Button type="button" onClick={onCancel}>{t`Cancel`}</Button>
             )}
             <FormSubmitButton label={t`Create`} variant="filled" />
-          </FormFooter>
+          </Modal.Footer>
         </Form>
       )}
     </FormProvider>

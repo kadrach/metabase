@@ -1,0 +1,5 @@
+/* The last field sits directly above Modal.Footer, which provides the spacing.
+   !important beats the legacy FormField's Emotion-injected margin-bottom. */
+.lastField {
+  margin-bottom: 0 !important;
+}

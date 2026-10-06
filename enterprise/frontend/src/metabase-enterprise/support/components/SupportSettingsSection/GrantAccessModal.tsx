@@ -12,7 +12,7 @@ import {
   FormTextarea,
 } from "metabase/forms";
 import { PLUGIN_SUPPORT } from "metabase/plugins";
-import { Box, Flex, Modal, Stack, Text } from "metabase/ui";
+import { Box, Modal, Stack, Text } from "metabase/ui";
 import { useCreateSupportAccessGrantMutation } from "metabase-enterprise/api";
 
 interface GrantAccessModalProps {
@@ -61,10 +61,9 @@ export const GrantAccessModal = ({ onClose }: GrantAccessModalProps) => {
       onClose={onClose}
       opened
       title={t`Grant Access?`}
-      padding="xxl"
     >
       <Stack>
-        <Box mt="sm">
+        <Box>
           <Text display="inline">
             {/* eslint-disable-next-line metabase/no-literal-metabase-strings -- This string only shows for admins. */}
             {t`You are about to allow a Metabase team member to access your instance.`}{" "}
@@ -99,16 +98,16 @@ export const GrantAccessModal = ({ onClose }: GrantAccessModalProps) => {
                   name="notes"
                   placeholder={t`Add any important information we should know to help you better.`}
                 />
-                <Flex justify="end" mt="lg" gap="lg">
-                  <FormErrorMessage />
-                  <FormSubmitButton
-                    disabled={!values.grant_duration_minutes}
-                    label={t`Grant access`}
-                    style={{ flexShrink: 0 }}
-                    variant="filled"
-                  />
-                </Flex>
               </Stack>
+              <Modal.Footer>
+                <FormErrorMessage flex={1} />
+                <FormSubmitButton
+                  disabled={!values.grant_duration_minutes}
+                  label={t`Grant access`}
+                  style={{ flexShrink: 0 }}
+                  variant="filled"
+                />
+              </Modal.Footer>
             </Form>
           )}
         </FormProvider>

@@ -1,7 +1,6 @@
 import { t } from "ttag";
 import * as Yup from "yup";
 
-import { FormFooter } from "metabase/common/components/FormFooter";
 import {
   Form,
   FormErrorMessage,
@@ -9,10 +8,12 @@ import {
   FormSubmitButton,
   FormTextInput,
 } from "metabase/forms";
-import { Button } from "metabase/ui";
+import { Button, Modal } from "metabase/ui";
 import * as Errors from "metabase/utils/errors";
 import { LoginAttributesWidget } from "metabase-enterprise/sandboxes/components/LoginAttributesWidget/LoginAttributesWidget";
 import type { Tenant } from "metabase-types/api";
+
+import S from "./TenantForm.module.css";
 
 const MAX_SLUG_LENGTH = 255;
 
@@ -61,7 +62,7 @@ export const TenantForm = ({
       onSubmit={onSubmit}
     >
       {({ values, setFieldValue, dirty }) => (
-        <Form disabled={!dirty} mt="sm">
+        <Form disabled={!dirty}>
           <FormTextInput
             name="name"
             title={t`Give this tenant a name`}
@@ -94,16 +95,17 @@ export const TenantForm = ({
             name="attributes"
             title={t`Default attributes`}
             description={t`Attributes to be applied to all users in this tenant.`}
+            className={S.lastField}
           />
-          <FormFooter>
-            <FormErrorMessage inline />
+          <Modal.Footer>
+            <FormErrorMessage flex={1} />
             <Button type="button" onClick={onCancel}>{t`Cancel`}</Button>
             <FormSubmitButton
               label={submitText}
               disabled={!dirty}
               variant="filled"
             />
-          </FormFooter>
+          </Modal.Footer>
         </Form>
       )}
     </FormProvider>

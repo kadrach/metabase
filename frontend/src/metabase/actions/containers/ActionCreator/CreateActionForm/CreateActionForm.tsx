@@ -4,7 +4,6 @@ import * as Yup from "yup";
 
 import { FormModelPicker } from "metabase/actions/containers/ActionCreator/FormModelPicker";
 import type { CreateQueryActionParams } from "metabase/actions/types";
-import { FormFooter } from "metabase/common/components/FormFooter";
 import {
   Form,
   FormErrorMessage,
@@ -13,8 +12,10 @@ import {
   FormTextInput,
   FormTextarea,
 } from "metabase/forms";
-import { Button } from "metabase/ui";
+import { Button, Modal } from "metabase/ui";
 import * as Errors from "metabase/utils/errors";
+
+import S from "./CreateActionForm.module.css";
 
 const ACTION_SCHEMA = Yup.object({
   name: Yup.string()
@@ -75,9 +76,13 @@ function CreateActionForm({
             mb="lg"
             nullable
           />
-          <FormModelPicker name="model_id" title={t`Model it's saved in`} />
-          <FormFooter>
-            <FormErrorMessage />
+          <FormModelPicker
+            name="model_id"
+            title={t`Model it's saved in`}
+            className={S.lastField}
+          />
+          <Modal.Footer>
+            <FormErrorMessage flex={1} />
             {!!onCancel && (
               <Button type="button" onClick={onCancel}>{t`Cancel`}</Button>
             )}
@@ -86,7 +91,7 @@ function CreateActionForm({
               disabled={!isValid}
               variant="filled"
             />
-          </FormFooter>
+          </Modal.Footer>
         </Form>
       )}
     </FormProvider>

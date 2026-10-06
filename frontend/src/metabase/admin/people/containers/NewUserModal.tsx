@@ -79,7 +79,7 @@ export const NewUserModal = ({
   const title = PLUGIN_TENANTS.getNewUserModalTitle(external) ?? t`Create user`;
 
   return (
-    <Modal opened title={title} padding="xxl" onClose={onClose}>
+    <Modal opened title={title} onClose={onClose}>
       <UserForm
         external={external}
         groups={groups}

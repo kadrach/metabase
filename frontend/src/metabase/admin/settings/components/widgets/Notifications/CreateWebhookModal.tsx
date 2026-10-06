@@ -55,7 +55,6 @@ export const CreateWebhookModal = ({
       opened={isOpen}
       onClose={onClose}
       size="36rem"
-      padding="2.5rem"
       title={t`New webhook destination`}
     >
       <WebhookForm

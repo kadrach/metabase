@@ -68,7 +68,6 @@ function CreateCollectionModal({
       onClose={onClose}
       size="lg"
       data-testid="new-collection-modal"
-      padding="40px"
       title={t`New collection`}
     >
       <CreateCollectionForm

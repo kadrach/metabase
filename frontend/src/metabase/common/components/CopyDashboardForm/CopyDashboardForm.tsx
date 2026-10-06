@@ -4,7 +4,6 @@ import * as Yup from "yup";
 
 import { useGetDashboardQuery } from "metabase/api";
 import FormCollectionPicker from "metabase/common/collections/containers/FormCollectionPicker/FormCollectionPicker";
-import { FormFooter } from "metabase/common/components/FormFooter";
 import type { FilterItemsInPersonalCollection } from "metabase/common/components/Pickers";
 import {
   DASHBOARD_DESCRIPTION_MAX_LENGTH,
@@ -20,7 +19,7 @@ import {
   FormTextInput,
   FormTextarea,
 } from "metabase/forms";
-import { Button, Group, Icon, Tooltip } from "metabase/ui";
+import { Button, Group, Icon, Modal, Tooltip } from "metabase/ui";
 import { isVirtualDashCard } from "metabase/utils/dashboard";
 import * as Errors from "metabase/utils/errors";
 import type { CollectionId, Dashboard, DashboardId } from "metabase-types/api";
@@ -149,13 +148,13 @@ function CopyDashboardForm({
           />
         )}
 
-        <FormFooter mt="1.5rem">
-          <FormErrorMessage inline />
+        <Modal.Footer>
+          <FormErrorMessage flex={1} />
           {!!onClose && (
             <Button type="button" onClick={onClose}>{t`Cancel`}</Button>
           )}
           <FormSubmitButton label={c(`A verb, not a noun`).t`Duplicate`} />
-        </FormFooter>
+        </Modal.Footer>
       </Form>
     </FormProvider>
   );

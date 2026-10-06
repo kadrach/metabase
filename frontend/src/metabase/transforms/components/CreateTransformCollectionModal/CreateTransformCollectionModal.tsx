@@ -17,7 +17,7 @@ import {
   FormTextInput,
   FormTextarea,
 } from "metabase/forms";
-import { Button, Group, Modal, Stack } from "metabase/ui";
+import { Button, Modal, Stack } from "metabase/ui";
 import type { Collection } from "metabase-types/api";
 
 type CreateTransformCollectionModalProps = {
@@ -68,7 +68,6 @@ export function CreateTransformCollectionModal({
       title={t`Transform folder`}
       opened
       onClose={onClose}
-      padding="xxl"
       onKeyDown={stopPropagation}
     >
       <FormProvider
@@ -77,7 +76,7 @@ export function CreateTransformCollectionModal({
         onSubmit={handleSubmit}
       >
         <Form>
-          <Stack gap="xl" mt="sm">
+          <Stack gap="xl">
             <FormTextInput
               name="name"
               label={t`Name`}
@@ -95,14 +94,14 @@ export function CreateTransformCollectionModal({
               title={t`Parent collection`}
               collectionPickerModalProps={{ namespaces: ["transforms"] }}
             />
-            <Group justify="flex-end">
-              <FormErrorMessage />
-              <Button variant="subtle" color="neutral" onClick={onClose}>
-                {t`Cancel`}
-              </Button>
-              <FormSubmitButton label={t`Create`} variant="filled" />
-            </Group>
           </Stack>
+          <Modal.Footer>
+            <FormErrorMessage flex={1} />
+            <Button variant="subtle" color="neutral" onClick={onClose}>
+              {t`Cancel`}
+            </Button>
+            <FormSubmitButton label={t`Create`} variant="filled" />
+          </Modal.Footer>
         </Form>
       </FormProvider>
     </Modal>
