@@ -426,15 +426,12 @@ jobs:
             env:
               enable-ssl-tests: 'true'
               enable-aws-iam-tests: 'true'
-          # `mysql:latest` now resolves to MySQL 26.x, which fails in a way that floods the log
-          # until the runner cancels the job. A cancelled job can't be soft-failed with
-          # continue-on-error, so the leg is disabled until 26.x is supported.
-          # - name: MySQL Latest
-          #   junit-name: be-tests-mysql-latest-ee
-          #   image: mysql:latest
-          #   env:
-          #     enable-ssl-tests: 'false'
-          #     enable-aws-iam-tests: 'false'
+          - name: MySQL Latest
+            junit-name: be-tests-mysql-latest-ee
+            image: mysql:latest
+            env:
+              enable-ssl-tests: 'false'
+              enable-aws-iam-tests: 'false'
         job:
           - name: Driver Tests
             test-args: >-
@@ -1103,9 +1100,9 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          # - name: SQL Server 2017
-          #   junit-name: be-tests-sqlserver-2017-ee
-          #   image: mcr.microsoft.com/mssql/server:2017-latest
+          - name: SQL Server 2017
+            junit-name: be-tests-sqlserver-2017-ee
+            image: mcr.microsoft.com/mssql/server:2017-latest
           - name: SQL Server 2022
             junit-name: be-tests-sqlserver-2022-ee
             image: mcr.microsoft.com/mssql/server:2022-latest
@@ -1155,33 +1152,32 @@ jobs:
         upload-logs: ${{ steps.test-driver.outcome == 'failure' }}
         logs-artifact-suffix: ${{ matrix.job.name }} ${{ matrix.version.name }}
 
-  # TODO(dpsutton, 2025-08-20): Re-enable starburst when we figure out why it randomly dies in CI
-  # be-tests-starburst-ee:
-  #   needs: determine-driver-skips
-  #   if: ${{ !inputs.skip && !(needs.determine-driver-skips.outputs.skip == 'true') }}
-  #   runs-on: ${{ vars.DEFAULT_RUNNER_KEY }}
-  #   timeout-minutes: 40
-  #   env:
-  #     CI: 'true'
-  #     DRIVERS: starburst
-  #   services:
-  #     starburst:
-  #       image: trinodb/trino:latest
-  #       env:
-  #         CATALOG_MANAGEMENT: dynamic
-  #       ports:
-  #         - "8080:8080"
-  #   name: Starburst
-  #   steps:
-  #   - uses: actions/checkout@v7
-  #   - name: Make plugins directory
-  #     run: mkdir plugins
-  #   - name: Test Starburst driver
-  #     uses: ./.github/actions/test-driver
-  #     with:
-  #       junit-name: 'be-tests-starburst-ee'
-  #       test-args: >-
-  #         :only-tags [:mb/driver-tests]
+  be-tests-starburst-ee:
+    needs: determine-driver-skips
+    if: ${{ !inputs.skip && !(needs.determine-driver-skips.outputs.skip == 'true') }}
+    runs-on: ${{ vars.DEFAULT_RUNNER_KEY }}
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      DRIVERS: starburst
+    services:
+      starburst:
+        image: trinodb/trino:latest
+        env:
+          CATALOG_MANAGEMENT: dynamic
+        ports:
+          - "8080:8080"
+    name: Starburst
+    steps:
+    - uses: actions/checkout@v7
+    - name: Make plugins directory
+      run: mkdir plugins
+    - name: Test Starburst driver
+      uses: ./.github/actions/test-driver
+      with:
+        junit-name: 'be-tests-starburst-ee'
+        test-args: >-
+          :only-tags [:mb/driver-tests]
 
   login-to-ecr:
     needs: determine-driver-skips
