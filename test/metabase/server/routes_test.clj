@@ -3,6 +3,7 @@
    [clojure.string :as str]
    [clojure.test :refer :all]
    [metabase.data-apps.core :as data-apps]
+   [metabase.premium-features.core :as premium-features]
    [metabase.server.routes.index :as index]
    [metabase.test :as mt]
    [metabase.test.http-client :as client]))
@@ -67,3 +68,14 @@
     (testing "without the feature it still falls through, so the instance reveals nothing about data apps"
       (mt/with-premium-features #{}
         (is (nil? (serve-data-app {:uri "/embed/apps/sales"})))))))
+
+(deftest data-app-entrypoint-raises-access-errors-test
+  (let [error (ex-info "Access denied" {:status-code 403})
+        callbacks (atom [])]
+    (with-redefs [premium-features/enable-data-apps? (constantly true)
+                  data-apps/check-data-app-access! (fn [_request] (throw error))
+                  index/data-app-shell (fn [& _args] (swap! callbacks conj :shell))]
+      (index/data-app {:metabase-user-id 1}
+                      (fn [response] (swap! callbacks conj [:respond response]))
+                      (fn [error] (swap! callbacks conj [:raise error]))))
+    (is (= [[:raise error]] @callbacks))))
