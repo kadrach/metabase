@@ -50,6 +50,12 @@
     (as-> (lib/query mp (lib.metadata/table mp (mt/id :venues))) q
       (lib/order-by q (lib.metadata/field mp (mt/id :venues :id))))))
 
+(defn- venues-count
+  []
+  (let [mp (mt/metadata-provider)]
+    (-> (lib/query mp (lib.metadata/table mp (mt/id :venues)))
+        (lib/aggregate (lib/count)))))
+
 (defn- data-lines
   "The table lines between the data boundary markers of a `run_query` output."
   [output]
@@ -277,6 +283,70 @@
           (is (= {:output unreadable-database-output}
                  (run-query/run-query-tool {:query_id "q1"}))))))))
 
+(defn- not-read-only-output
+  [query-id]
+  (str "run_query only runs a single read-only SELECT statement, and query " query-id " is not one. "
+       "Rewrite it as one SELECT that changes and locks nothing. " notebook-query-hint))
+
+(defn- card-query
+  "A notebook query whose source is the saved question `card-id`."
+  [card-id]
+  {:database (mt/id), :type :query, :query {:source-table (str "card__" card-id)}})
+
+(deftest run-query-saved-question-test
+  (mt/with-non-admin-groups-no-root-collection-perms
+    (mt/with-temp [:model/Collection {open :id}   {}
+                   :model/Collection {hidden :id} {}
+                   :model/Card {notebook-card :id}    {:collection_id open
+                                                       :dataset_query (venues-count)}
+                   :model/Card {sql-card :id}         {:collection_id open
+                                                       :dataset_query (mt/native-query
+                                                                       {:query "SELECT ID FROM VENUES ORDER BY ID"})}
+                   :model/Card {over-sql-card :id}    {:collection_id open
+                                                       :dataset_query (card-query sql-card)}
+                   :model/Card {write-card :id}       {:collection_id open
+                                                       :dataset_query (mt/native-query
+                                                                       {:query "SELECT 1; DROP TABLE IF EXISTS NOPE"})}
+                   :model/Card {hidden-card :id}      {:collection_id hidden
+                                                       :dataset_query (venues-count)}
+                   :model/Card {hidden-sql-card :id}  {:collection_id hidden
+                                                       :dataset_query (mt/native-query {:query "SELECT 1"})}]
+      (perms/grant-collection-read-permissions! (perms-group/all-users) open)
+      (let [sql-card-refused (str "run_query only runs notebook queries, and this one reads a saved SQL question. "
+                                  notebook-query-hint)
+            no-permission    {:output "You do not have permission to run query q1."}]
+        (testing "a notebook query over a saved notebook question runs"
+          (is (=? {:structured-output {:returned 1, :truncated? false}}
+                  (run-tool! {"q1" (card-query notebook-card)} {:query_id "q1"}))))
+        (testing "with SQL execution off, a notebook query over a saved SQL question is refused as SQL"
+          (doseq [[shape card-id] {"read directly"                  sql-card
+                                   "read through a notebook question" over-sql-card}]
+            (testing shape
+              (is (= {:output sql-card-refused}
+                     (run-tool! {"q1" (card-query card-id)} {:query_id "q1"}))))))
+        (testing "with SQL execution on, a saved SQL question runs"
+          (doseq [card-id [sql-card over-sql-card]]
+            (is (=? {:structured-output {:returned 2, :truncated? true}}
+                    (run-sql-tool! {"q1" (card-query card-id)} {:query_id "q1", :row_limit 2})))))
+        (testing "a saved SQL question that is not one read-only SELECT is refused before anything runs"
+          (let [ran? (atom false)]
+            (mt/with-dynamic-fn-redefs [qp/process-query (fn [& _] (reset! ran? true) {:status :failed})]
+              (is (= {:output (not-read-only-output "q1")}
+                     (run-sql-tool! {"q1" (card-query write-card)} {:query_id "q1"}))))
+            (is (false? @ran?))))
+        (testing "a SQL user without native query permission may not run a saved SQL question"
+          (mt/with-no-data-perms-for-all-users!
+            (perms/set-database-permission! (perms-group/all-users) (mt/id) :perms/view-data :unrestricted)
+            (perms/set-database-permission! (perms-group/all-users) (mt/id) :perms/create-queries :query-builder)
+            (is (= {:output (str "You do not have permission to run SQL against the database of query q1. "
+                                 notebook-query-hint)}
+                   (run-sql-tool! {"q1" (card-query sql-card)} {:query_id "q1"})))))
+        (testing "a saved question the user can't read gets one refusal, whether or not it is SQL"
+          (doseq [card-id [hidden-card hidden-sql-card]
+                  run!    [run-tool! run-sql-tool!]]
+            (is (= no-permission
+                   (run! {"q1" (card-query card-id)} {:query_id "q1"})))))))))
+
 (deftest run-query-nested-sql-refusal-test
   (testing "with SQL execution off, SQL nested in a notebook query gets the SQL refusal whatever its database"
     (mt/with-temp [:model/Database {unreadable-db :id} {:engine :h2}]
@@ -333,11 +403,6 @@
                                       "type"       "native"
                                       "native"     {"query" "SELECT 1 AS N"}}}
                                {:query_id "q1"})))))))
-
-(defn- not-read-only-output
-  [query-id]
-  (str "run_query only runs a single read-only SELECT statement, and query " query-id " is not one. "
-       "Rewrite it as one SELECT that changes and locks nothing. " notebook-query-hint))
 
 (defn- run-sql-recording!
   "Run `query` as q1 with SQL execution on, the QP stubbed out. Returns `[output ran?]`."

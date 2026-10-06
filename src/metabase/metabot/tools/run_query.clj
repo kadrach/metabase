@@ -7,6 +7,7 @@
    [metabase.driver.util :as driver.u]
    [metabase.lib-be.core :as lib-be]
    [metabase.lib.core :as lib]
+   [metabase.lib.metadata :as lib.metadata]
    [metabase.metabot.db :as metabot.db]
    [metabase.metabot.query-execution :as query-execution]
    [metabase.metabot.scope :as scope]
@@ -17,6 +18,7 @@
    [metabase.metabot.tools.sql.common :as sql.common]
    [metabase.metabot.tools.util :as tools.u]
    [metabase.models.interface :as mi]
+   [metabase.query-permissions.core :as query-perms]
    [metabase.query-processor.compile :as qp.compile]
    [metabase.query-processor.pipeline :as qp.pipeline]
    [metabase.sql-tools.core :as sql-tools]
@@ -151,9 +153,9 @@
    `process-query`; checking here first lets the model read why a run was refused.
    An unreadable database reads exactly like a missing one, so the refusal is no existence oracle. The permission
    refusal is reachable only for a database the user can already read, so its distinct message discloses nothing."
-  [query-id database-id]
+  [query-id database-id sql-source]
   (when-not (scope/sql-execution-allowed?)
-    (throw (ex-info (str "run_query only runs notebook queries, and this one is a SQL query. " notebook-query-hint)
+    (throw (ex-info (str "run_query only runs notebook queries, and this one " sql-source ". " notebook-query-hint)
                     {:agent-error? true})))
   (when-not (readable-database? database-id)
     (throw (database-not-found query-id)))
@@ -193,16 +195,37 @@
       (throw (not-read-only-select query-id)))
     sql))
 
+(defn- check-cards-runnable!
+  "Refuse `query` when it reads a saved question and the current user may not run it. Checked before
+   [[reads-sql-card?]] looks inside those questions, so a refusal for SQL never tells the user what a question they
+   can't read holds."
+  [query-id query]
+  (when (and (lib/all-source-card-ids query)
+             (not (query-perms/can-run-query? query)))
+    (throw (ex-info (str "You do not have permission to run query " query-id ".")
+                    {:agent-error? true}))))
+
+(defn- reads-sql-card?
+  "Whether `query` reads a saved SQL question at any depth: as its source, in a join, or through another saved
+   question. The SQL of such a question runs inside the notebook query around it, so the query is a SQL query for
+   every check here, although no stage of `query` itself is native."
+  [query]
+  (boolean
+   (some (fn [card-id]
+           (some-> (lib.metadata/card query card-id) :dataset-query not-empty lib/any-native-stage?))
+         (lib/all-source-card-ids-recursive query))))
+
 (defn- runnable-query
   "`{:query :checked-sql}`: the serialized MBQL 5 form of the query stored under `query-id`, which state may hold as
    MBQL 4 (the user's viewing context) or MBQL 5, and for a SQL query the SQL it compiled to. A SQL query passes
    [[check-sql-runnable!]] before anything else touches it, and [[check-read-only-select!]] once it is serialized.
+   A notebook query that reads a saved SQL question ([[reads-sql-card?]]) is a SQL query here too.
    The query's parameters, its bound filter and template-tag values, are kept: serializing strips them as runtime-only,
    and without them the model would read a broader result than the one the user sees."
   [query-id query]
   (let [native? (native-query? query)]
     (when native?
-      (check-sql-runnable! query-id (raw-database-id query)))
+      (check-sql-runnable! query-id (raw-database-id query) "is a SQL query"))
     (let [normalized (lib-be/normalize-query query)]
       ;; Normalizing recovers to an empty map from any failure, a missing database or a malformed query alike.
       ;; Only a database the user can read gets the distinct message, so a missing and an unreadable one still
@@ -213,11 +236,17 @@
                  (database-not-found query-id))))
       ;; Normalizing can surface a native stage under a spelling [[native-query?]] does not follow.
       (when (and (not native?) (lib/any-native-stage? normalized))
-        (check-sql-runnable! query-id (:database normalized)))
-      (let [serialized (cond-> (lib/prepare-for-serialization normalized)
+        (check-sql-runnable! query-id (:database normalized) "is a SQL query"))
+      (let [sql?       (or native?
+                           (lib/any-native-stage? normalized)
+                           (do (check-cards-runnable! query-id normalized)
+                               (when (reads-sql-card? normalized)
+                                 (check-sql-runnable! query-id (:database normalized) "reads a saved SQL question")
+                                 true)))
+            serialized (cond-> (lib/prepare-for-serialization normalized)
                          (seq (:parameters normalized)) (assoc :parameters (:parameters normalized)))]
         {:query       serialized
-         :checked-sql (when (or native? (lib/any-native-stage? normalized))
+         :checked-sql (when sql?
                         (check-read-only-select! query-id serialized))}))))
 
 (defn- execute-page!
