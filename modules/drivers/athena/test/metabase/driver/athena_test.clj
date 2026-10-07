@@ -3,6 +3,7 @@
   (:require
    [clojure.string :as str]
    [clojure.test :refer :all]
+   [metabase.config.core :as config]
    [metabase.driver :as driver]
    [metabase.driver.athena :as athena]
    [metabase.driver.sql-jdbc.connection :as sql-jdbc.conn]
@@ -269,6 +270,11 @@
         (is (not (contains?
                   (sql-jdbc.conn/connection-details->spec :athena {:region "us-west-2"})
                   :AwsCredentialsProviderClass)))))))
+
+(deftest ^:parallel application-name-test
+  (testing "ApplicationName identifies Metabase in the driver's User-Agent"
+    (is (= (format "Metabase/%s" (:tag config/mb-version-info))
+           (:ApplicationName (sql-jdbc.conn/connection-details->spec :athena {:region "us-west-2"}))))))
 
 (deftest ^:parallel page-test
   (testing ":page clause places OFFSET *before* LIMIT"

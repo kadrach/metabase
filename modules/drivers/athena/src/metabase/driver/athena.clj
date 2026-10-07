@@ -93,7 +93,8 @@
         :Password       secret_key
         :OutputLocation s3_staging_dir
         :WorkGroup      workgroup
-        :Region      region}
+        :Region      region
+        :ApplicationName (format "Metabase/%s" (:tag driver-api/mb-version-info))}
        (when dbname
          {:database dbname})
        (when (and (not (driver-api/is-hosted?)) (str/blank? access_key))
